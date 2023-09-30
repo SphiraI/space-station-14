@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using Content.Shared.Administration.Logs;
 using Content.Shared.Audio;
 using Content.Shared.Body.Components;
@@ -6,12 +6,14 @@ using Content.Shared.Database;
 using Content.Shared.Emag.Components;
 using Content.Shared.Emag.Systems;
 using Content.Shared.Examine;
+using Content.Shared.Mobs;
 using Content.Shared.Mobs.Components;
 using Content.Shared.Stacks;
 using Robust.Shared.Containers;
 using Robust.Shared.GameStates;
 using Robust.Shared.Physics.Events;
 using Robust.Shared.Timing;
+using Content.Shared.Mobs.Systems;
 
 namespace Content.Shared.Materials;
 
@@ -26,6 +28,7 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
     [Dependency] protected readonly SharedAmbientSoundSystem AmbientSound = default!;
     [Dependency] private readonly SharedAudioSystem _audio = default!;
     [Dependency] private readonly SharedContainerSystem _container = default!;
+    [Dependency] private readonly MobStateSystem _mobState = default!;
 
     public const string ActiveReclaimerContainerId = "active-material-reclaimer-container";
 
@@ -130,7 +133,7 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
         }
 
         if (Timing.CurTime > component.NextSound)
-            component.Stream = _audio.PlayPvs(component.Sound, uid);
+          component.Stream = _audio.PlayPvs(component.Sound, uid);
         component.NextSound = Timing.CurTime + component.SoundCooldown;
 
         var duration = GetReclaimingDuration(uid, item, component);
@@ -216,19 +219,19 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
     {
         return component.Powered &&
                component.Enabled &&
-               HasComp<BodyComponent>(victim) &&
+               HasComp<BodyComponent>(victim) && _mobState.IsDead(victim) &&
                HasComp<EmaggedComponent>(uid);
     }
 
     /// <summary>
-    /// Gets the duration of processing a specified entity.
-    /// Processing is calculated from the sum of the materials within the entity.
-    /// It does not regard the chemicals within it.
-    /// </summary>
+        /// Gets the duration of processing a specified entity.
+        /// Processing is calculated from the sum of the materials within the entity.
+        /// It does not regard the chemicals within it.
+        /// </summary>
     public TimeSpan GetReclaimingDuration(EntityUid reclaimer,
-        EntityUid item,
-        MaterialReclaimerComponent? reclaimerComponent = null,
-        PhysicalCompositionComponent? compositionComponent = null)
+    EntityUid item,
+    MaterialReclaimerComponent? reclaimerComponent = null,
+    PhysicalCompositionComponent? compositionComponent = null)
     {
         if (!Resolve(reclaimer, ref reclaimerComponent))
             return TimeSpan.Zero;

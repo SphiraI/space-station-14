@@ -1,0 +1,55 @@
+- type: entity
+  parent: BaseItem
+  id: TestHonker
+  name: test honker
+  description: coding is fun! Honk!
+  components:
+  - type: Sprite
+    sprite: Objects/Fun/bikehorn.rsi
+    state: icon
+  - type: Item
+    sprite: Objects/Fun/bikehorn.rsi
+    size: 5
+  - type: Clothing
+    sprite: Objects/Fun/bikehorn.rsi
+    slots: [Belt]
+    quickEquip: false
+  - type: ItemCooldown
+  - type: EmitSoundOnUse
+    sound:
+      collection: BikeHorn
+      params:
+        variation: 0.125
+  - type: UseDelay
+    delay: 0.1
+  - type: EmitSoundOnTrigger
+    sound:
+      collection: BikeHorn
+      params:
+        variation: 0.125
+  - type: Tag
+    tags:
+    - Payload # yes, you can make re-usable prank grenades
+    - BikeHorn
+  - type: MeleeWeapon
+    soundHit:
+      collection: BikeHorn
+      params:
+        variation: 0.125
+    damage:
+      types:
+        Blunt: 1
+        Burn: 1
+  - type: Tool
+    qualities:
+    - Honking
+    useSound:
+      collection: BikeHorn
+  - type: Food
+  - type: SolutionContainerManager
+    solutions:
+      food:
+        maxVol: 10
+        reagents:
+        - ReagentId: Nutriment
+          Quantity: 6.66 
