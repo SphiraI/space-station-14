@@ -2,6 +2,7 @@ using System.Linq;
 using Content.Shared.Administration.Logs;
 using Content.Shared.Audio;
 using Content.Shared.Body.Components;
+using Content.Shared.Damage;
 using Content.Shared.Database;
 using Content.Shared.Emag.Components;
 using Content.Shared.Emag.Systems;
@@ -14,6 +15,7 @@ using Robust.Shared.GameStates;
 using Robust.Shared.Physics.Events;
 using Robust.Shared.Timing;
 using Content.Shared.Mobs.Systems;
+using Content.Shared.Damage.Components;
 
 namespace Content.Shared.Materials;
 
@@ -84,13 +86,14 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
         args.Handled = true;
     }
 
-    private void OnCollide(EntityUid uid, CollideMaterialReclaimerComponent component, ref StartCollideEvent args)
+    private void OnCollide(EntityUid uid, CollideMaterialReclaimerComponent component, DamageContactsComponent damage, ref StartCollideEvent args)
     {
         if (args.OurFixtureId != component.FixtureId)
             return;
         if (!TryComp<MaterialReclaimerComponent>(uid, out var reclaimer))
             return;
         TryStartProcessItem(uid, args.OtherEntity, reclaimer);
+        //Collision damage here SPHIRAL
     }
 
     private void OnActiveStartup(EntityUid uid, ActiveMaterialReclaimerComponent component, ComponentStartup args)
@@ -224,10 +227,10 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
     }
 
     /// <summary>
-        /// Gets the duration of processing a specified entity.
-        /// Processing is calculated from the sum of the materials within the entity.
-        /// It does not regard the chemicals within it.
-        /// </summary>
+    /// Gets the duration of processing a specified entity.
+    /// Processing is calculated from the sum of the materials within the entity.
+    /// It does not regard the chemicals within it.
+    /// </summary>
     public TimeSpan GetReclaimingDuration(EntityUid reclaimer,
     EntityUid item,
     MaterialReclaimerComponent? reclaimerComponent = null,
