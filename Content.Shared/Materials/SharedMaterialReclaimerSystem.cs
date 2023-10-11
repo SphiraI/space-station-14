@@ -16,6 +16,17 @@ using Robust.Shared.Physics.Events;
 using Robust.Shared.Timing;
 using Content.Shared.Mobs.Systems;
 using Content.Shared.Damage.Components;
+using Robust.Shared.Network;
+using Content.Shared.Damage.Systems;
+using Robust.Shared.Physics.Systems;
+using Robust.Shared.Physics;
+using Robust.Shared.Physics.Dynamics;
+using Robust.Shared.Physics.Components;
+using System.Threading.Tasks;
+using Robust.Shared.Toolshed.Commands.Generic.ListGeneration;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using Content.Shared.Xenoarchaeology.Equipment;
+using Content.Server.Xenoarchaeology.XenoArtifacts.Triggers.Components;
 
 namespace Content.Shared.Materials;
 
@@ -27,10 +38,13 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
 {
     [Dependency] private readonly ISharedAdminLogManager _adminLog = default!;
     [Dependency] protected readonly IGameTiming Timing = default!;
+    [Dependency] private readonly INetManager _net = default!;
     [Dependency] protected readonly SharedAmbientSoundSystem AmbientSound = default!;
     [Dependency] private readonly SharedAudioSystem _audio = default!;
     [Dependency] private readonly SharedContainerSystem _container = default!;
     [Dependency] private readonly MobStateSystem _mobState = default!;
+    [Dependency] private readonly SharedBroadphaseSystem _broadphase = default!;
+    [Dependency] private readonly ArtifactSystem _artifact = default!;
 
     public const string ActiveReclaimerContainerId = "active-material-reclaimer-container";
 
@@ -43,7 +57,10 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
         SubscribeLocalEvent<MaterialReclaimerComponent, EntityUnpausedEvent>(OnUnpaused);
         SubscribeLocalEvent<MaterialReclaimerComponent, ExaminedEvent>(OnExamined);
         SubscribeLocalEvent<MaterialReclaimerComponent, GotEmaggedEvent>(OnEmagged);
+        SubscribeLocalEvent<MobStateChangedEvent>(OnMobStateChanged);
+        SubscribeLocalEvent<MaterialReclaimerComponent, AttemptDamageContactEvent>(OnAttemptDamageContact);
         SubscribeLocalEvent<CollideMaterialReclaimerComponent, StartCollideEvent>(OnCollide);
+        //SubscribeLocalEvent<CollideMaterialReclaimerComponent, EndCollideEvent>(AfterCollide);
         SubscribeLocalEvent<ActiveMaterialReclaimerComponent, ComponentStartup>(OnActiveStartup);
         SubscribeLocalEvent<ActiveMaterialReclaimerComponent, EntityUnpausedEvent>(OnActiveUnpaused);
     }
@@ -85,15 +102,39 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
     {
         args.Handled = true;
     }
-
-    private void OnCollide(EntityUid uid, CollideMaterialReclaimerComponent component, DamageContactsComponent damage, ref StartCollideEvent args)
+    private void OnCollide(EntityUid uid, CollideMaterialReclaimerComponent component, ref StartCollideEvent args)
     {
         if (args.OurFixtureId != component.FixtureId)
             return;
         if (!TryComp<MaterialReclaimerComponent>(uid, out var reclaimer))
             return;
         TryStartProcessItem(uid, args.OtherEntity, reclaimer);
-        //Collision damage here SPHIRAL
+        BufferTryStartProcessItem(uid, args.OtherEntity, 4, reclaimer);
+    }
+    /*private void AfterCollide(EntityUid uid, CollideMaterialReclaimerComponent component, ref EndCollideEvent args)
+    {
+        if (args.OurFixtureId != component.FixtureId)
+            return;
+        if (!TryComp<MaterialReclaimerComponent>(uid, out var reclaimer))
+            return;
+        TryStartProcessItem(uid, args.OtherEntity, reclaimer);
+    }*/
+
+    private void OnMobStateChanged(MobStateChangedEvent ev)
+    {
+        if (ev.NewMobState != MobState.Dead)
+            return;
+
+        var deathXform = Transform(ev.Target);
+
+        foreach (var (trigger, xform) in EntityQuery<ArtifactDeathTriggerComponent, TransformComponent>())
+        {
+            if (!deathXform.Coordinates.TryDistance(EntityManager, xform.Coordinates, out var distance))
+                continue;
+
+            if (distance > trigger.Range)
+                continue;
+        }
     }
 
     private void OnActiveStartup(EntityUid uid, ActiveMaterialReclaimerComponent component, ComponentStartup args)
@@ -136,7 +177,13 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
         }
 
         if (Timing.CurTime > component.NextSound)
-          component.Stream = _audio.PlayPvs(component.Sound, uid);
+        {
+            if (_net.IsServer)
+            {
+                //don't predict sound that client couldn't have played already
+                component.Stream = _audio.PlayPvs(component.Sound, uid);
+            }
+        }
         component.NextSound = Timing.CurTime + component.SoundCooldown;
 
         var duration = GetReclaimingDuration(uid, item, component);
@@ -222,8 +269,36 @@ public abstract class SharedMaterialReclaimerSystem : EntitySystem
     {
         return component.Powered &&
                component.Enabled &&
-               HasComp<BodyComponent>(victim) && _mobState.IsDead(victim) &&
+               HasComp<BodyComponent>(victim) && _mobState.IsIncapacitated(victim) &&
                HasComp<EmaggedComponent>(uid);
+    }
+
+    private void BufferTryStartProcessItem(EntityUid uid, EntityUid item, int length, MaterialReclaimerComponent reclaimer)
+    {
+        for (int i = 0; i < length; i++)
+        {
+            Timer.Spawn(1750, () =>
+            {
+                if (_mobState.IsIncapacitated(item))
+                {
+                    TryStartProcessItem(uid, item, reclaimer);
+                }
+            });
+        }
+    }
+
+    /// <summary>
+    /// Checks if the recycler is on.
+    /// If it is, allow contact damage.
+    /// If it isn't, cancel the call.
+    ///</summary>
+
+    private void OnAttemptDamageContact(EntityUid uid, MaterialReclaimerComponent component, AttemptDamageContactEvent args)
+    {
+        if (!component.Enabled)
+        {
+            args.Cancel();
+        }
     }
 
     /// <summary>

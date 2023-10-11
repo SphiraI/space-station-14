@@ -1,4 +1,4 @@
-﻿- type: entity
+- type: entity
   id: Recycler
   parent: BaseMachinePowered
   name: recycler
@@ -16,7 +16,7 @@
       brrt:
         shape:
           !type:PhysShapeAabb
-          bounds: "-0.15,-0.15,0.15,0.15"
+          bounds: "-0.50,-0.50,0.50,0.50"
         hard: false
         layer:
         - FullTileLayer
@@ -110,4 +110,18 @@
         maxVol: 0 #exists only for the overflow stuff on material reclaimer
   - type: MaterialStorage
   - type: Conveyor
+    speed: 0.2
   - type: Rotatable
+  - type: TriggerOnCollide
+    fixtureID: brrt
+  - type: DamageContacts
+    damage:
+      types:
+        Blunt: 20
+        Slash: 15
+        Piercing: 25
+  - type: SlowContacts
+    walkSpeedModifier: 0.2
+    sprintSpeedModifier: 0.2
+
+    
